@@ -1,0 +1,7 @@
+numpy
+packaging
+pandas
+scikit_learn
+sentence_transformers
+swifter
+torch
