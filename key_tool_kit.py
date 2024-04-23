@@ -104,13 +104,20 @@ class KeyToolkit:
         damping_k = 5, 
         damping_alpha = 0.0001,
         start_position = 0,
-        topk=None):
+        topk=None,
+        keep_scores=False):
         
         keyword_list = sort_keywords_list(keyword_list)
         if topk is not None:
-            kwonly = keywords_only(keyword_list[:topk])
+            if keep_scores == True:
+                kw = keyword_list[:topk]
+            else:
+                kw = keywords_only(keyword_list[:topk])
         else:
             number = round(damping_func(len(keyword_list), damping_k, damping_alpha))
-            kwonly = keywords_only(keyword_list[start_position:number+start_position])
+            if keep_scores == True:
+                kw = keyword_list[start_position:number+start_position]#
+            else:
+                kw = keywords_only(keyword_list[start_position:number+start_position])
 
-        return kwonly
+        return kw

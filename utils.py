@@ -15,7 +15,6 @@ def sort_keywords_list(kwlist, sort_by_index:int = 1):
     return sorted(kwlist, key=lambda x: x[sort_by_index], reverse=True)
 
 def keywords_only(keywords: List[Tuple], loc = 0):
-
     if not keywords:
         return []
     return [str(t[loc]) for t in keywords]
