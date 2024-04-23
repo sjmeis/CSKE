@@ -1,7 +1,10 @@
+matplotlib
 numpy
 packaging
 pandas
+Requests
 scikit_learn
+scipy
 sentence_transformers
 swifter
 torch
