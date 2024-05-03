@@ -44,9 +44,10 @@ class KeyExGen:
         
         extracted_filtered = self.toolkit.filter_extracted(filtered, topk=topk, keep_scores=keep_scores)
 
+        starting_seed = [x.lower() for x in starting_seed]
         if keep_scores == True:
-            allwords = [(x, 1.0) for x in starting_seed] + [x for x in extracted_filtered if x[0] not in starting_seed]
+            allwords = [x for x in extracted_filtered if x[0] not in starting_seed]
         else:
-            allwords = starting_seed + [x for x in extracted_filtered if x not in starting_seed]
+            allwords = [x for x in extracted_filtered if x not in starting_seed]
 
         return allwords
