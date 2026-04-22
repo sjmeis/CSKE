@@ -53,7 +53,8 @@ class KeywordFilter:
             min_dist=0.1, 
             n_components=5, 
             metric='cosine', 
-            random_state=42
+            random_state=42,
+            verbose=False
         )
         logger.info(f"Projecting {len(current_kws)} embeddings with UMAP...")
         embeddings_2d = reducer.fit_transform(embeddings_all)

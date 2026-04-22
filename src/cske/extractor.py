@@ -12,17 +12,24 @@ class CSKE:
     Class-specific Keyword Extraction (CSKE).
     
     This class provides the main pipeline for iteratively extracting and filtering 
-    keywords based on a starting seed and a target dataset.
+    keywords based on starting seeds and a target dataset.
     """
     
-    def __init__(self, embedding_model: str = "all-MiniLM-L6-v2"):
+    def __init__(self, embedding_model: str = "all-MiniLM-L6-v2", verbose: bool = True):
         """
         Initialize the CSKE pipeline.
         
         Args:
             embedding_model: The name of the sentence-transformers model to use.
+            verbose: Whether to display progress bars.
         """
-        self.toolkit = KeyToolkit(embedding_model=embedding_model)
+        self.verbose = verbose
+        if self.verbose:
+            logging.getLogger("cske").setLevel(logging.INFO)
+        else:
+            logging.getLogger("cske").setLevel(logging.ERROR)
+
+        self.toolkit = KeyToolkit(embedding_model=embedding_model, verbose=self.verbose)
         self.filterer = KeywordFilter()
 
     def keyword_pipeline(
@@ -86,7 +93,7 @@ class CSKE:
             topk=topk, 
             keep_scores=keep_scores
         )
-        
+
         starting_seed_lower = [x.lower() for x in starting_seed]
         
         if keep_scores:

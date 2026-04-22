@@ -2,7 +2,8 @@ import pandas as pd
 import numpy as np
 import logging
 from typing import List, Tuple, Union, Optional
-import swifter
+from tqdm.auto import tqdm
+tqdm.pandas()
 
 from .model import KeyBERTMod
 from .utils import sort_keywords_list, damping_func, keywords_only
@@ -15,8 +16,8 @@ class KeyToolkit:
     Core utilities for iterative keyword extraction and list management.
     """
     
-    def __init__(self, embedding_model: str):
-        self.extractor = KeyBERTMod(model_name=embedding_model)
+    def __init__(self, embedding_model: str, verbose: bool = True):
+        self.extractor = KeyBERTMod(model_name=embedding_model, verbose=self.verbose)
         
     def extract_keywords_iteration(
         self,
@@ -47,7 +48,8 @@ class KeyToolkit:
         for i, df_batch in enumerate(dfs):
             logger.info(f"Processing Iteration {i+1}/{split_n}...")
             
-            df_batch['max_keyword'] = df_batch.swifter.apply(
+            apply_func = df_batch[df_col_name].progress_apply if self.verbose else df_batch[df_col_name].apply
+            df_batch['max_keyword'] = df_batch.apply_func(
                 lambda x: self.extractor.extract_keywords_max(
                     x[df_col_name],
                     vectorizer=vectorizer, 
