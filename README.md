@@ -1,3 +1,10 @@
+<div align="left">
+
+  [![PyPI version](https://img.shields.io/pypi/v/cske.svg)](https://pypi.org/project/cske/)
+  [![License](https://img.shields.io/github/license/sjmeis/CSKE.svg)](https://github.com/sjmeis/CSKE/blob/main/LICENSE)
+
+</div>
+
 # CSKE: Class-Specific Keyword Extraction
 CSKE is a high-performance Python library designed for iterative, class-specific keyword extraction. Unlike generic extractors, CSKE maintains coherence to a user-defined class, and leverages clustering techniques to ensure that expanded keyword sets remain semantically anchored to the target class.
 
