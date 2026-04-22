@@ -4,7 +4,7 @@ os.environ["USE_TF"] = "0"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
-from .extractor import KeyExGen as CSKE
+from .extractor import CSKE
 from .model import KeyBERTMod
 from .filter import KeywordFilter
 import logging
