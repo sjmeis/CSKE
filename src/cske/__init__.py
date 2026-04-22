@@ -20,5 +20,7 @@ def enable_logging(level=logging.INFO):
     logger.addHandler(handler)
     logger.setLevel(level)
 
-__version__ = "0.1.3"
+enable_logging()
+
+__version__ = "0.2.0"
 __all__ = ["CSKE", "KeyBERTMod", "KeywordFilter"]

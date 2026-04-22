@@ -89,3 +89,5 @@ If you find `CSKE` useful or utilize it for your work, please considering citing
     pages = "159--165"
 }
 ```
+
+This work makes use of the `KeyBERT` library, so please also consider citing it: [KeyBERT](https://github.com/MaartenGr/KeyBERT)

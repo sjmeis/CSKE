@@ -59,7 +59,7 @@ class KeywordFilter:
         logger.info(f"Projecting {len(current_kws)} embeddings with UMAP...")
         embeddings_2d = reducer.fit_transform(embeddings_all)
 
-        seed_indices = [i for i, txt in enumerate(texts) if txt.lower() in seed_lower]
+        seed_indices = [i for i, txt in enumerate(current_kws) if txt.lower() in seed_lower]
         
         if len(seed_indices) < 3:
             logger.warning("Not enough seed keywords found in current set to form a Convex Hull.")

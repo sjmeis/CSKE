@@ -12,10 +12,15 @@ class KeyBERTMod:
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = SentenceTransformer(model_name, device=device)
-
-    def get_embeddings(self, texts: Union[str, List[str]], show_progress: bool = True) -> np.ndarray:
+    
+    def get_embeddings(self, texts: List[str], show_progress: bool = False) -> np.ndarray:
         display = show_progress if show_progress is not None else self.verbose
-        return self.model.encode(texts, show_progress_bar=display, batch_size=64)
+        return self.model.encode(
+            texts, 
+            show_progress_bar=display, 
+            batch_size=64,
+            convert_to_numpy=True
+        )
 
     def extract_keywords(
         self,

@@ -17,7 +17,13 @@ class KeyToolkit:
     """
     
     def __init__(self, embedding_model: str, verbose: bool = True):
+        self.verbose = verbose
         self.extractor = KeyBERTMod(model_name=embedding_model, verbose=self.verbose)
+
+        if self.verbose:
+            tqdm.pandas(desc="Processing Documents")
+        else:
+            pd.Series.progress_apply = pd.Series.apply
         
     def extract_keywords_iteration(
         self,
@@ -49,14 +55,14 @@ class KeyToolkit:
             logger.info(f"Processing Iteration {i+1}/{split_n}...")
             
             apply_func = df_batch[df_col_name].progress_apply if self.verbose else df_batch[df_col_name].apply
-            df_batch['max_keyword'] = df_batch.apply_func(
+            df_batch['max_keyword'] = apply_func(
                 lambda x: self.extractor.extract_keywords_max(
-                    x[df_col_name],
+                    x,
                     vectorizer=vectorizer, 
                     seed_keywords=current_seed, 
                     doc_weight=doc_weight, 
                     seed_weight=seed_weight
-                ), axis=1
+                )
             )
             
             max_kw_list = dict(keywords_list_from_df_with_score(df_batch, 'max_keyword'))
