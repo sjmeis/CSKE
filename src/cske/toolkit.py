@@ -73,18 +73,31 @@ class KeyToolkit:
 
             chunk_size = 512
             batch_results = []
-            for idx in range(0, len(texts), chunk_size):
-                chunk = texts[idx : idx + chunk_size]
-                chunk_res = self.extractor.extract_keywords_batch(
-                    docs=chunk,
-                    seed_keywords=current_seed,
-                    seed_embeds=seed_embeds,
-                    vectorizer=batch_vec,
-                    doc_weight=doc_weight,
-                    seed_weight=seed_weight,
-                    strategy=strategy
-                )
-                batch_results.extend(chunk_res)
+            with tqdm(
+                total=len(texts),
+                desc=f"Iteration {i+1}/{split_n}",
+                unit="doc",
+                disable=not self.verbose,
+                leave=False
+            ) as pbar:
+                for idx in range(0, len(texts), chunk_size):
+                    chunk = texts[idx : idx + chunk_size]
+                    chunk_res = self.extractor.extract_keywords_batch(
+                        docs=chunk,
+                        seed_keywords=current_seed,
+                        seed_embeds=seed_embeds,
+                        vectorizer=batch_vec,
+                        doc_weight=doc_weight,
+                        seed_weight=seed_weight,
+                        strategy=strategy
+                    )
+                    batch_results.extend(chunk_res)
+
+                    pbar.update(len(chunk))
+                    pbar.set_postfix({
+                        "seeds": len(current_seed),
+                        "chunk_size": len(chunk)
+                    })
 
             df_batch['extracted_keywords'] = batch_results
             extracted_kw_list = dict(keywords_list_from_df_with_score(df_batch, 'extracted_keywords'))

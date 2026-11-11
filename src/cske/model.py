@@ -69,7 +69,11 @@ class KeyBERTMod:
             return [[] for _ in docs]
 
         doc_embeds = self.get_embeddings(docs, show_progress=False)
-        vocab_embeds = self.get_embeddings(feature_names.tolist(), show_progress=False)
+        show_vocab_pbar = self.verbose and len(feature_names) > 1000
+        vocab_embeds = self.get_embeddings(
+            feature_names.tolist(), 
+            show_progress=show_vocab_pbar
+        )
 
         if seed_embeds is None:
             seed_embeds = self.get_embeddings(seed_keywords, show_progress=False)

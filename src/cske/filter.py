@@ -54,7 +54,11 @@ class KeywordFilter:
 
         logger.info(f"Filtering {len(current_kws)} keywords via Geometric Hull...")
         
-        embeddings_all = self.model.encode(all_texts, batch_size=64, show_progress_bar=False)
+        embeddings_all = self.model.encode(
+            all_texts, 
+            batch_size=64, 
+            show_progress_bar=(len(all_texts) > 100)
+        )
         reducer = umap.UMAP(
             n_neighbors=min_dist(n_samples, default=15),
             min_dist=0.1, 
