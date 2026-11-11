@@ -2,7 +2,7 @@ import re
 import numpy as np
 import pandas as pd
 from typing import List, Tuple
-from collections import Counter
+from sklearn.feature_extraction.text import CountVectorizer
 import ast
 from .utils import cos_sim
 
@@ -14,7 +14,6 @@ def keywords_list_from_df_with_score(
 ) -> List[Tuple[str, float]]:    
     """
     Extracts and flattens keyword-score tuples from a DataFrame column.
-    Handles columns stored as strings (via ast.literal_eval) or as native lists.
     """
     if df.empty or col_name not in df.columns:
         return []
@@ -26,48 +25,47 @@ def keywords_list_from_df_with_score(
     first_val = temp_series.iloc[0]
     if isinstance(first_val, str):
         try:
-            keywords_list = temp_series.apply(ast.literal_eval).tolist()
+            sublists = [ast.literal_eval(x) for x in temp_series if isinstance(x, str)]
         except (ValueError, SyntaxError):
-            keywords_list = temp_series.tolist()
+            sublists = []
     else:
-        keywords_list = temp_series.tolist()
+        sublists = temp_series.tolist()
 
-    flattened_list = [
+    flattened = [
         (item[0], float(item[1]))
-        for sublist in keywords_list
-        if isinstance(sublist, (list, tuple))
-        for item in sublist
-        if isinstance(item, (list, tuple)) and len(item) >= 2
+        for sublist in sublists if isinstance(sublist, (list, tuple))
+        for item in sublist if len(item) >= 2
     ]
 
-    if remove_duplicates:
+    if not remove_duplicates:
+        result = flattened
+    else:
         unique_kws = {}
-        for kw, score in flattened_list:
+        for kw, score in flattened:
             if kw not in unique_kws or score > unique_kws[kw]:
                 unique_kws[kw] = score
-        flattened_data = list(unique_kws.items())
-    else:
-        flattened_data = flattened_list
+        result = list(unique_kws.items())
 
-    if sort == 'ascending':
-        return sorted(flattened_data, key=lambda x: x[1])
-    elif sort == 'descending':
-        return sorted(flattened_data, key=lambda x: x[1], reverse=True)
+    if sort == 'descending':
+        result.sort(key=lambda x: x[1], reverse=True)
+    elif sort == 'ascending':
+        result.sort(key=lambda x: x[1])
 
-    return flattened_data
+    return result
 
 def count_occurrence(df: pd.DataFrame, words: List[Tuple], col_name: str) -> List[Tuple]:
     """Efficiently counts keyword occurrences in the dataframe."""
-    corpus = df[col_name].dropna().astype(str).str.lower().tolist()
-    results = []
+    if not words:
+        return []
+
+    corpus = df[col_name].dropna().astype(str).tolist()
+    vocabulary = {str(item[0]).lower(): idx for idx, item in enumerate(words)}
+
+    cv = CountVectorizer(vocabulary=vocabulary, lowercase=True)
+    dtm = cv.fit_transform(corpus)
     
-    for item in words:
-        kw = str(item[0]).lower()
-        pattern = re.compile(r'\b' + re.escape(kw) + r'\b')
-        count = sum(len(pattern.findall(text)) for text in corpus)
-        results.append((item[0], item[1], count))
-        
-    return results
+    counts = np.asarray(dtm.sum(axis=0)).flatten()
+    return [(w[0], w[1], int(counts[vocabulary[str(w[0]).lower()]])) for w in words]
 
 def keywords_avg_scores_kb(keyword_list: List[str], keyBERT, seed_keywords: List[str]):
     """Calculates the semantic distance between candidates and the seed centroid."""
@@ -81,8 +79,8 @@ def keywords_avg_scores_kb(keyword_list: List[str], keyBERT, seed_keywords: List
     centroid_sim = cos_sim(cand_emb, centroid).cpu().numpy().flatten()
     
     matrix_sim = cos_sim(cand_emb, seed_emb).cpu().numpy()
-    max_sim = np.max(matrix_sim.numpy(), axis=1)
+    max_sim = np.max(matrix_sim, axis=1)
 
-    avg_scores = (centroid_sim.numpy() + max_sim) / 2    
+    avg_scores = (centroid_sim + max_sim) / 2    
     results = [(kw, round(float(s), 4)) for kw, s in zip(keyword_list, avg_scores)]
     return sorted(results, key=lambda x: x[1], reverse=True)

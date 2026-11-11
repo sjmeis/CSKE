@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import logging
 from typing import List, Tuple, Union, Optional
+from sklearn.feature_extraction.text import CountVectorizer
 from tqdm.auto import tqdm
 tqdm.pandas()
 
@@ -31,7 +32,8 @@ class KeyToolkit:
         seed_weight: float = 1.0,
         percentile_newseed: float = 99, 
         number_newseed: int = 3, 
-        count_occurrences: bool = False
+        count_occurrences: bool = False,
+        strategy: str = "hybrid"
     ) -> List[Tuple]:
         """
         Runs the iterative expansion logic by splitting the dataframe and 
@@ -45,37 +47,53 @@ class KeyToolkit:
         current_seed = [item.strip().lower() for item in starting_seed if item.strip()]
         kw_dict_all = {kw: 1.0 for kw in current_seed}
         
-        for i, df_batch in enumerate(dfs):
-            if df_batch.empty:
+        for i, df_chunk in enumerate(dfs):
+            if df_chunk.empty:
                 continue
-
+            
+            df_batch = df_chunk.copy()
             logger.info(f"Processing Iteration {i+1}/{split_n}...")
             
             seed_embeds = self.extractor.get_embeddings(current_seed, show_progress=False)
 
             texts = df_batch[df_col_name].tolist()
-            batch_results = []
             
-            pbar = tqdm(texts, desc=f"Iteration {i+1}", disable=not self.verbose)
-            for text in pbar:
-                res = self.extractor.extract_keywords_max(
-                    text,
+            batch_vec = vectorizer
+            if batch_vec is None:
+                batch_vec = CountVectorizer(ngram_range=(1, 1), stop_words="english")
+                try:
+                    batch_vec.fit(texts)
+                except ValueError:
+                    batch_vec = None
+            elif not hasattr(batch_vec, "vocabulary_"):
+                try:
+                    batch_vec.fit(texts)
+                except ValueError:
+                    pass
+
+            chunk_size = 512
+            batch_results = []
+            for idx in range(0, len(texts), chunk_size):
+                chunk = texts[idx : idx + chunk_size]
+                chunk_res = self.extractor.extract_keywords_batch(
+                    docs=chunk,
                     seed_keywords=current_seed,
                     seed_embeds=seed_embeds,
-                    vectorizer=vectorizer,
+                    vectorizer=batch_vec,
                     doc_weight=doc_weight,
-                    seed_weight=seed_weight
+                    seed_weight=seed_weight,
+                    strategy=strategy
                 )
-                batch_results.append(res)
+                batch_results.extend(chunk_res)
 
-            df_batch['max_keyword'] = batch_results
-            max_kw_list = dict(keywords_list_from_df_with_score(df_batch, 'max_keyword'))
+            df_batch['extracted_keywords'] = batch_results
+            extracted_kw_list = dict(keywords_list_from_df_with_score(df_batch, 'extracted_keywords'))
 
-            if not max_kw_list:
+            if not extracted_kw_list:
                 continue
             
             combined_kw_scores = keywords_avg_scores_kb(
-                list(max_kw_list.keys()), 
+                list(extracted_kw_list.keys()), 
                 keyBERT=self.extractor, 
                 seed_keywords=current_seed
             )
@@ -97,7 +115,7 @@ class KeyToolkit:
                 current_seed.extend(new_seeds[:number_newseed])
                 current_seed = list(dict.fromkeys(current_seed))
 
-        df_final = pd.concat(dfs, ignore_index=True)
+        df_final = df_work
         keywords = list(kw_dict_all.items())
 
         if count_occurrences:

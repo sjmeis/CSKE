@@ -33,84 +33,84 @@ class KeyBERTMod:
             convert_to_numpy=True
         )
 
-    def extract_keywords(
+    def extract_keywords_batch(
         self,
-        doc: str,
-        seed_keywords: List[str],
-        doc_weight: float = 0.0,
-        seed_weight: float = 1.0,
-        top_n: int = 5,
-        vectorizer: Optional[CountVectorizer] = None
-    ) -> List[Tuple[str, float]]:
-        """
-        Improved keyword extraction with weighted seed influence.
-        """
-        if not doc or pd.isna(doc):
-            return []
-
-        if vectorizer is None:
-            vectorizer = CountVectorizer(ngram_range=(1, 1), stop_words="english")
-        
-        try:
-            count = vectorizer.fit([doc])
-            candidates = count.get_feature_names_out()
-        except ValueError:
-            return []
-
-        doc_embed = self.get_embeddings([doc])
-        cand_embeds = self.get_embeddings(candidates.tolist())
-        seed_embeds = self.get_embeddings(seed_keywords)
-        
-        avg_seed_embed = np.mean(seed_embeds, axis=0, keepdims=True)
-
-        target_embed = (doc_embed * doc_weight + avg_seed_embed * seed_weight) / (doc_weight + seed_weight)
-
-        distances = cos_sim(target_embed, cand_embeds)
-        results = sorted(zip(candidates, distances), key=lambda x: x[1], reverse=True)
-
-        return [(word, round(float(score), 4)) for word, score in results[:top_n]]
-    
-    def extract_keywords_max(
-        self,
-        doc: str,
+        docs: List[str],
         seed_keywords: List[str],
         seed_embeds: Optional[np.ndarray] = None,
         doc_weight: float = 0.0,
         seed_weight: float = 1.0,
         top_n: int = 5,
-        vectorizer: Optional[CountVectorizer] = None
-    ) -> List[Tuple[str, float]]:
-        if not doc or pd.isna(doc):
+        vectorizer: Optional[CountVectorizer] = None,
+        strategy: str = "hybrid"
+    ) -> List[List[Tuple[str, float]]]:
+        if not docs:
             return []
 
         if vectorizer is None:
-            vectorizer = CountVectorizer(ngram_range=(1, 1), stop_words="english")
+            active_vectorizer = CountVectorizer(ngram_range=(1, 1), stop_words="english")
+            try:
+                doc_term_mat = active_vectorizer.fit_transform(docs)
+                feature_names = active_vectorizer.get_feature_names_out()
+            except ValueError:
+                return [[] for _ in docs]
+        else:
+            active_vectorizer = vectorizer
+            try:
+                if not hasattr(active_vectorizer, "vocabulary_"):
+                    doc_term_mat = active_vectorizer.fit_transform(docs)
+                else:
+                    doc_term_mat = active_vectorizer.transform(docs)
+                feature_names = active_vectorizer.get_feature_names_out()
+            except ValueError:
+                return [[] for _ in docs]
 
-        try:
-            count = vectorizer.fit([doc])
-            candidates = count.get_feature_names_out()
-        except ValueError:
-            return []
+        if len(feature_names) == 0:
+            return [[] for _ in docs]
 
-        if len(candidates) == 0:
-            return []
-
-        doc_embed = self.get_embeddings([doc], show_progress=False)
-        cand_embeds = self.get_embeddings(candidates.tolist(), show_progress=False)
+        doc_embeds = self.get_embeddings(docs, show_progress=False)
+        vocab_embeds = self.get_embeddings(feature_names.tolist(), show_progress=False)
 
         if seed_embeds is None:
             seed_embeds = self.get_embeddings(seed_keywords, show_progress=False)
 
-        sim_matrix = cos_sim(seed_embeds, cand_embeds).cpu().numpy()
-        max_seed_sim = np.max(sim_matrix, axis=0)
+        seed_sim_matrix = cos_sim(seed_embeds, vocab_embeds).cpu().numpy()
 
-        doc_sim = cos_sim(doc_embed, cand_embeds).cpu().numpy().flatten()
+        if strategy == "max":
+            seed_score = np.max(seed_sim_matrix, axis=0)
+        elif strategy == "mean":
+            seed_score = np.mean(seed_sim_matrix, axis=0)
+        elif strategy == "hybrid":
+            max_score = np.max(seed_sim_matrix, axis=0)
+            mean_score = np.mean(seed_sim_matrix, axis=0)
+            seed_score = (max_score + mean_score) / 2.0
+        else:
+            raise ValueError(f"Unknown strategy '{strategy}'. Choose 'max', 'mean', or 'hybrid'.")
+
+        doc_sim_matrix = cos_sim(doc_embeds, vocab_embeds).cpu().numpy()
 
         total_weight = doc_weight + seed_weight
         if total_weight == 0:
-            combined_scores = max_seed_sim
+            combined_scores = np.repeat(seed_score[np.newaxis, :], len(docs), axis=0)
         else:
-            combined_scores = (doc_sim * doc_weight + max_seed_sim * seed_weight) / total_weight
+            combined_scores = (doc_sim_matrix * doc_weight + seed_score * seed_weight) / total_weight
 
-        results = sorted(zip(candidates, combined_scores), key=lambda x: x[1], reverse=True)
-        return [(word, round(float(score), 4)) for word, score in results[:top_n]]
+        results = []
+        for row_idx in range(len(docs)):
+            active_indices = doc_term_mat[row_idx].indices
+            if len(active_indices) == 0:
+                results.append([])
+                continue
+
+            row_scores = combined_scores[row_idx, active_indices]
+            row_words = feature_names[active_indices]
+
+            if len(row_scores) > top_n:
+                top_k_idx = np.argpartition(row_scores, -top_n)[-top_n:]
+                top_k_idx = top_k_idx[np.argsort(-row_scores[top_k_idx])]
+            else:
+                top_k_idx = np.argsort(-row_scores)
+
+            results.append([(row_words[k], round(float(row_scores[k]), 4)) for k in top_k_idx])
+
+        return results

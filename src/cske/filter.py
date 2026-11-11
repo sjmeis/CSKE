@@ -14,8 +14,11 @@ def min_dist(n, default):
     return max(2, min(n - 1, default))
 
 class KeywordFilter:
-    def __init__(self, model_name: str = 'all-mpnet-base-v2', device: Optional[str] = None):
-        self.model = SentenceTransformer(model_name, device=device)
+    def __init__(self, model_name: str = 'all-mpnet-base-v2', shared_model: Optional[SentenceTransformer] = None, device: Optional[str] = None):
+        if shared_model is not None:
+            self.model = shared_model
+        else:
+            self.model = SentenceTransformer(model_name, device=device)
 
     def get_synonyms(self, keywords: List[str]) -> List[str]:
         """Fetches related terms from ConceptNet to expand the filter's 'safety zone'."""
@@ -40,9 +43,13 @@ class KeywordFilter:
             return keywords, []
         
         current_kws = [x[0] for x in keywords]
-        seed_lower = [s.lower() for s in seed_keywords]
+        seed_clean = list(dict.fromkeys(s.strip() for s in seed_keywords if s.strip()))
+        seed_clean_lower = {s.lower() for s in seed_clean}
 
-        all_texts = current_kws + [s for s in seed_lower if s not in current_kws]
+        current_kws_lower = {k.lower() for k in current_kws}
+        missing_seeds = [s for s in seed_clean if s.lower() not in current_kws_lower]
+        
+        all_texts = current_kws + missing_seeds
         n_samples = len(all_texts)
 
         logger.info(f"Filtering {len(current_kws)} keywords via Geometric Hull...")
@@ -56,14 +63,13 @@ class KeywordFilter:
             random_state=42,
             verbose=False
         )
-        logger.info(f"Projecting {len(current_kws)} embeddings with UMAP...")
+        logger.info(f"Projecting {n_samples} embeddings with UMAP...")
         embeddings_2d = reducer.fit_transform(embeddings_all)
         cand_embeddings_2d = embeddings_2d[:len(current_kws)]
 
-        all_texts_lower = [t.lower() for t in all_texts]
         seed_indices = [
-            i for i, txt in enumerate(all_texts_lower) 
-            if any(s.lower() == txt for s in seed_lower)
+            i for i, txt in enumerate(all_texts) 
+            if txt.lower() in seed_clean_lower
         ]
         
         if len(seed_indices) < 3:

@@ -27,7 +27,7 @@ class CSKE:
         if filter_model:
             self.filterer = KeywordFilter(model_name=filter_model)
         else:
-            self.filterer = KeywordFilter(model_name=embedding_model)
+            self.filterer = KeywordFilter(shared_model=self.toolkit.extractor.model)
 
     def keyword_pipeline(
         self, 
@@ -43,7 +43,8 @@ class CSKE:
         count_occurrences: bool = False,
         topk: Optional[int] = None,
         do_filter: bool = True,
-        keep_scores: bool = False
+        keep_scores: bool = False,
+        strategy: str = "hybrid"
     ) -> Union[List[str], List[tuple]]:
         """
         Executes the full keyword extraction, expansion, and filtering pipeline.
@@ -77,7 +78,8 @@ class CSKE:
             seed_weight=seed_weight,
             percentile_newseed=percentile_newseed_extraction,
             number_newseed=number_newseed,
-            count_occurrences=count_occurrences
+            count_occurrences=count_occurrences,
+            strategy=strategy
         )
         
         if do_filter and all_extracted_scores:

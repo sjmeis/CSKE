@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Optional
 
 def damping_func(n: int, k: int, alpha: float) -> float:
     """Logarithmic damping: $ f(n) = k \cdot (\ln(n) - \ln(\alpha)) $"""
@@ -8,12 +8,17 @@ def damping_func(n: int, k: int, alpha: float) -> float:
         return 0
     return k * (np.log(n) - np.log(alpha))
 
-def cos_sim(a: Union[np.ndarray, torch.Tensor], b: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
+def cos_sim(a: Union[np.ndarray, torch.Tensor], b: Union[np.ndarray, torch.Tensor], device: Optional[Union[str, torch.device]] = None) -> torch.Tensor:
     """Standardized Cosine Similarity using PyTorch for speed."""
     if not isinstance(a, torch.Tensor):
-        a = torch.as_tensor(a, dtype=torch.float32)
+        a = torch.as_tensor(a, dtype=torch.float32, device=device)
+    elif device is not None:
+        a = a.to(device)
+
     if not isinstance(b, torch.Tensor):
-        b = torch.as_tensor(b, dtype=torch.float32)
+        b = torch.as_tensor(b, dtype=torch.float32, device=a.device)
+    else:
+        b = b.to(a.device)
 
     if a.ndim == 1:
         a = a.unsqueeze(0)
