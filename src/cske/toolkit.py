@@ -19,11 +19,6 @@ class KeyToolkit:
     def __init__(self, embedding_model: str, verbose: bool = True):
         self.verbose = verbose
         self.extractor = KeyBERTMod(model_name=embedding_model, verbose=self.verbose)
-
-        if self.verbose:
-            tqdm.pandas(desc="Processing Documents")
-        else:
-            pd.Series.progress_apply = pd.Series.apply
         
     def extract_keywords_iteration(
         self,
@@ -37,62 +32,72 @@ class KeyToolkit:
         percentile_newseed: float = 99, 
         number_newseed: int = 3, 
         count_occurrences: bool = False
-    ) -> List[Tuple[str, float, int]]:
+    ) -> List[Tuple]:
         """
         Runs the iterative expansion logic by splitting the dataframe and 
         evolving the seed set.
         """
-
-        df_work = df_whole.copy()
-        df_work.dropna(subset=[df_col_name], inplace=True)
+        df_work = df_whole[[df_col_name]].dropna().copy()
+        if df_work.empty:
+            return []
 
         dfs = np.array_split(df_work, split_n)
-        current_seed = [item.lower() for item in starting_seed]
-
+        current_seed = [item.strip().lower() for item in starting_seed if item.strip()]
         kw_dict_all = {kw: 1.0 for kw in current_seed}
         
         for i, df_batch in enumerate(dfs):
+            if df_batch.empty:
+                continue
+
             logger.info(f"Processing Iteration {i+1}/{split_n}...")
             
-            apply_func = df_batch[df_col_name].progress_apply if self.verbose else df_batch[df_col_name].apply
-            df_batch['max_keyword'] = apply_func(
-                lambda x: self.extractor.extract_keywords_max(
-                    x,
-                    vectorizer=vectorizer, 
-                    seed_keywords=current_seed, 
-                    doc_weight=doc_weight, 
+            seed_embeds = self.extractor.get_embeddings(current_seed, show_progress=False)
+
+            texts = df_batch[df_col_name].tolist()
+            batch_results = []
+            
+            pbar = tqdm(texts, desc=f"Iteration {i+1}", disable=not self.verbose)
+            for text in pbar:
+                res = self.extractor.extract_keywords_max(
+                    text,
+                    seed_keywords=current_seed,
+                    seed_embeds=seed_embeds,
+                    vectorizer=vectorizer,
+                    doc_weight=doc_weight,
                     seed_weight=seed_weight
                 )
-            )
-            
+                batch_results.append(res)
+
+            df_batch['max_keyword'] = batch_results
             max_kw_list = dict(keywords_list_from_df_with_score(df_batch, 'max_keyword'))
+
+            if not max_kw_list:
+                continue
             
             combined_kw_scores = keywords_avg_scores_kb(
                 list(max_kw_list.keys()), 
                 keyBERT=self.extractor, 
                 seed_keywords=current_seed
             )
-            
             kw_dict_all.update(dict(combined_kw_scores))
 
             scores_only = [t[1] for t in combined_kw_scores]
-            threshold = np.percentile(scores_only, percentile_newseed)
-            
-            new_seeds = [
-                kw for kw, score in combined_kw_scores 
-                if score >= threshold and kw not in current_seed
-            ]
-
-            if not new_seeds:
+            if scores_only:
+                threshold = np.percentile(scores_only, percentile_newseed)
                 new_seeds = [
-                    kw for kw, _ in combined_kw_scores[:number_newseed] 
-                    if kw not in current_seed
+                    kw for kw, score in combined_kw_scores
+                    if score >= threshold and kw not in current_seed
                 ]
+                if not new_seeds:
+                    new_seeds = [
+                        kw for kw, _ in combined_kw_scores[:number_newseed]
+                        if kw not in current_seed
+                    ]
 
-            current_seed.extend(new_seeds[:number_newseed])
-            current_seed = list(set(current_seed)) # Deduplicate
+                current_seed.extend(new_seeds[:number_newseed])
+                current_seed = list(dict.fromkeys(current_seed))
 
-        df_final = pd.concat(dfs)
+        df_final = pd.concat(dfs, ignore_index=True)
         keywords = list(kw_dict_all.items())
 
         if count_occurrences:

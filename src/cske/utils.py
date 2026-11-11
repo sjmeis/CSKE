@@ -4,14 +4,22 @@ from typing import List, Tuple, Union
 
 def damping_func(n: int, k: int, alpha: float) -> float:
     """Logarithmic damping: $ f(n) = k \cdot (\ln(n) - \ln(\alpha)) $"""
-    if n <= 0: return 0
+    if n <= 0:
+        return 0
     return k * (np.log(n) - np.log(alpha))
 
 def cos_sim(a: Union[np.ndarray, torch.Tensor], b: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
     """Standardized Cosine Similarity using PyTorch for speed."""
-    if not isinstance(a, torch.Tensor): a = torch.tensor(a)
-    if not isinstance(b, torch.Tensor): b = torch.tensor(b)
-    
+    if not isinstance(a, torch.Tensor):
+        a = torch.as_tensor(a, dtype=torch.float32)
+    if not isinstance(b, torch.Tensor):
+        b = torch.as_tensor(b, dtype=torch.float32)
+
+    if a.ndim == 1:
+        a = a.unsqueeze(0)
+    if b.ndim == 1:
+        b = b.unsqueeze(0)
+
     a_norm = torch.nn.functional.normalize(a, p=2, dim=1)
     b_norm = torch.nn.functional.normalize(b, p=2, dim=1)
     return torch.mm(a_norm, b_norm.transpose(0, 1))

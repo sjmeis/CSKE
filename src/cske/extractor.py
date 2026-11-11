@@ -5,7 +5,7 @@ from typing import List, Optional, Union
 from .toolkit import KeyToolkit
 from .filter import KeywordFilter
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("cske.extractor")
 
 class CSKE:
     """
@@ -15,22 +15,19 @@ class CSKE:
     keywords based on starting seeds and a target dataset.
     """
     
-    def __init__(self, embedding_model: str = "all-MiniLM-L6-v2", verbose: bool = True):
+    def __init__(self, embedding_model: str = "all-MiniLM-L6-v2", verbose: bool = True, filter_model: Optional[str] = None):
         """
         Initialize the CSKE pipeline.
-        
-        Args:
-            embedding_model: The name of the sentence-transformers model to use.
-            verbose: Whether to display progress bars.
         """
         self.verbose = verbose
-        if self.verbose:
-            logging.getLogger("cske").setLevel(logging.INFO)
-        else:
-            logging.getLogger("cske").setLevel(logging.ERROR)
+        pkg_logger = logging.getLogger("cske")
+        pkg_logger.setLevel(logging.INFO if self.verbose else logging.ERROR)
 
         self.toolkit = KeyToolkit(embedding_model=embedding_model, verbose=self.verbose)
-        self.filterer = KeywordFilter()
+        if filter_model:
+            self.filterer = KeywordFilter(model_name=filter_model)
+        else:
+            self.filterer = KeywordFilter(model_name=embedding_model)
 
     def keyword_pipeline(
         self, 
@@ -42,7 +39,7 @@ class CSKE:
         n_iterations: int = 5, 
         doc_weight: float = 0.0, 
         seed_weight: float = 1.0,
-        percentile_newseed_extraction: float = 99,
+        percentile_newseed_extraction: float = 99.0,
         count_occurrences: bool = False,
         topk: Optional[int] = None,
         do_filter: bool = True,
@@ -63,6 +60,10 @@ class CSKE:
         Returns:
             A list of extracted keywords or tuples.
         """
+        if not starting_seed:
+            raise ValueError("starting_seed cannot be empty.")
+        if df.empty or df_col_to_extract not in df.columns:
+            raise ValueError(f"DataFrame must contain column '{df_col_to_extract}'.")
         
         logger.info(f"Starting CSKE pipeline with {len(starting_seed)} seed words.")
 
@@ -79,8 +80,8 @@ class CSKE:
             count_occurrences=count_occurrences
         )
         
-        if do_filter:
-            logger.info("Applying Convex Hull and Outlier filtering...")
+        if do_filter and all_extracted_scores:
+            logger.info("Applying Convex Hull and Outlier Filtering...")
             filtered, _ = self.filterer.filter(
                 keywords=all_extracted_scores, 
                 seed_keywords=starting_seed
