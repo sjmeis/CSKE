@@ -2,9 +2,8 @@ matplotlib
 numpy
 packaging
 pandas
-Requests
+requests
 scikit_learn
 scipy
 sentence_transformers
-swifter
 torch
